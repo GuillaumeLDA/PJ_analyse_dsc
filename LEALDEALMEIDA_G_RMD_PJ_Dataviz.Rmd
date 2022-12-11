@@ -1,0 +1,694 @@
+---
+title: "Projet_Data_Viz"
+author: "Guillaume Leal De Almeida"
+date: "2022-11-21"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+## Contexte et Obejectif : 
+
+Groupama est une entreprise d'assurance française. En tant qu'alternant Data Analyst chez Groupama, et plus précisément chez Groupama Gan Vie (GGVie), unique filiale d'Assurance de Personnes du Groupe, je suis amené à utiliser toute sorte de données sensibles sur nos clients. Cela peut être les noms, adresses, numéros de compte, numéros de contrat, les montants, les données de nos commerciaux, etc. Malheureusement, GGVie est assez fermé et je n'ai pas pu récupérer leurs données, et je ne sais pas si j'aurais les droits un jour. En revanche, un collègue, qui est aussi en alternance et qui à les mêmes problèmes d'accès aux données que moi, m'a parlé d'un site *http://insideairbnb.com/* qui recense des données sur les biens locatifs présents sur AirBnB, et dans plusieurs villes. Les données téléchargeables sur le site Inside Airbnb proviennent d'informations accessibles au public sur le site Airbnb. 
+La base de données que je vais utiliser contient un panel d'information sur les biens en location sur Paris, des données qui se rapprochent de ce que je peux utiliser dans la vraie vie. 
+
+Dans ce rapport, nous allons réaliser une étude des prix en locatif dans Paris et essayer de trouver ce qui peut influencer le prix. Nous allons aussi essayer de faire des cartes, car je n'ai jamais eu l'occasion de faire ce genre de représentation sur R
+
+
+## Libraries 
+```{r}
+pkgLoad <- function( packages = "favourites" ) {
+  
+  if( length( packages ) == 1L && packages == "favourites" ) {
+    packages <- c(
+     "readxl", 
+     "readr", 
+     "tidyr", 
+     "ggplot2", 
+     "ggmap", 
+     "dplyr",
+     "sf", 
+     "visdat", 
+     "leaflet", 
+     "maps", 
+     "stringr",
+     "questionr", 
+     "RColorBrewer",
+     "GGally"
+    )
+  }
+  
+  packagecheck <- match( packages, utils::installed.packages()[, 1] )
+  
+  packagestoinstall <- packages[ is.na( packagecheck ) ]
+  
+  if( length( packagestoinstall ) > 0L ) {
+    utils::install.packages( packagestoinstall,
+                             repos = "https://pbil.univ-lyon1.fr/CRAN/"
+    )
+  } else {
+    print( "All requested packages already installed" )
+  }
+  
+  for( package in packages ) {
+    suppressPackageStartupMessages(
+      library( package, character.only = TRUE, quietly = TRUE )
+    )
+  }
+  
+}
+
+
+pkgLoad()
+```
+
+```{r}
+#Liste des librairies nécessaire 
+require(readxl) #import de mes données
+require(readr) #import de mes données
+require(tidyr) #
+require(ggplot2) #analyse descriptive/ graphique
+require(ggmap) #cartographie via google
+require(dplyr)
+require(sf) #cartographie
+require(visdat) #Visualisation valeurs maquantes
+require(leaflet) #Cartographie
+require(maps) #Cartographie
+require(stringr) #Manipulation string 
+require(questionr) 
+require(RColorBrewer) #couleurs supplémetaires
+require(GGally) #Matrice des corrélations
+```
+
+# Les Données
+
+## Présentation des données
+
+Nous allons charger le jeu de données, mais aussi son dictionnaire qui contient pour chaque variable sa signification.
+
+```{r}
+#Chemin et chargement repertoire de travail
+path <- file.path("/Applications", "Dossier", "cours", "Master MIASHS","R_analyse","data", fsep="/")
+setwd(path)
+#Import des données
+df <- read_csv("listings.csv")
+#Import du dictionnaire de nos données
+Dictionnaire <- read_excel("Inside Airbnb Data Dictionary.xlsx", 
+                           range = "A9:D83", col_names = FALSE)
+#On modifie le noms de nos colonnes pour le dictionnaire
+nomscol <- c("NomVar", "Type", "Calculated", "Description")
+colnames(Dictionnaire) <- nomscol
+
+#listing de nos variables
+Dictionnaire$NomVar
+
+```
+On a 75 variables pour 61365 observations.
+
+## Nettoyage des données
+
+### Premier tri des variables a analyser
+
+Comme nous avons beaucoup de données, nous allons faire une sélection et supprimer celles qui ne nous servirons pas. 
+Nous enlevons celles qui sont inutiles, soit parce qu'elles ne nous apportent aucune information intéressante (url par exemple, ou la variable description des biens qui est un petit texte libre de l'utilisateur, etc), soit parce que des variables sont vides (bathrooms par exemple).
+
+```{r}
+summary(df)
+#on voit que bathrooms contient 0 valeur
+table(df$bathrooms)
+
+#liste qui contient les variables à supprimer 
+delcol <- c("listing_url","scrape_id","last_scraped","source","description","neighborhood_overview","picture_url","host_url","host_about","host_thumbnail_url","host_picture_url"
+            ,"host_neighbourhood","host_listings_count","neighbourhood_group_cleansed","minimum_minimum_nights","maximum_minimum_nights","minimum_maximum_nights","maximum_maximum_nights"
+            ,"minimum_nights_avg_ntm","maximum_nights_avg_ntm","calendar_updated","availability_30","availability_60","availability_90","availability_365","calendar_last_scraped","license"
+            ,"instant_bookable","calculated_host_listings_count","calculated_host_listings_count_entire_homes","calculated_host_listings_count_private_rooms","calculated_host_listings_count_shared_rooms"
+            ,"reviews_per_month","bathrooms","amenities","first_review","last_review","review_scores_accuracy","host_response_time","host_response_rate","host_acceptance_rate"
+            ,"host_verifications","host_has_profile_pic","number_of_reviews","number_of_reviews_ltm"      
+            ,"number_of_reviews_l30d","review_scores_rating","review_scores_cleanliness","review_scores_checkin","review_scores_communication"
+            )
+
+#Suppression des valeurs colonnes dans le data base et en ligne dans notre dictionnaire 
+df <- subset(df, select = -c(listing_url,scrape_id,last_scraped,source,description,neighborhood_overview,picture_url,host_url,host_about,host_thumbnail_url,host_picture_url
+                             ,host_neighbourhood,host_listings_count,neighbourhood_group_cleansed,minimum_minimum_nights,maximum_minimum_nights,minimum_maximum_nights,maximum_maximum_nights
+                             ,minimum_nights_avg_ntm,maximum_nights_avg_ntm,calendar_updated,availability_30,availability_60,availability_90,availability_365,calendar_last_scraped,license
+                             ,instant_bookable,calculated_host_listings_count,calculated_host_listings_count_entire_homes,calculated_host_listings_count_private_rooms,calculated_host_listings_count_shared_rooms
+                             ,reviews_per_month,bathrooms,amenities,first_review,last_review,review_scores_accuracy,host_response_time,host_response_rate,host_acceptance_rate
+                             ,host_verifications,host_has_profile_pic,number_of_reviews,number_of_reviews_ltm,number_of_reviews_l30d,review_scores_rating
+                             ,review_scores_cleanliness,review_scores_checkin,review_scores_communication
+                             ))
+Dictionnaire <- Dictionnaire[ ! Dictionnaire$NomVar %in% delcol, ]
+
+head(df)
+```
+
+Finalement les valeurs que je garde sont : 
+
+```{r}
+Dictionnaire[,c(1,2,4)]
+```
+
+## Data Cleanning
+
+```{r}
+vis_miss(df,warn_large_data=FALSE)#grapgique valeurs manquantes
+#ggsave("val_manquantes.png", width = 11, height = 8)
+```
+Grâce à ce graphique nous pouvons voir où sont nos données manquantes.
+
+On voit déjà que la variable "neighbourhood", contient presque 50% de données manquantes. Analysons la de plus près :
+
+```{r}
+#tirage aléatoire de la variable neighbourhood et neighbourhood_cleansed pour une comparaison
+df[sample(1:nrow(df),10),c(10,11)]
+```
+
+En fait, la variable neighbourhood contient surtout la ville du bien. Étant donné que nous n’avons sélectionné que des biens sur Paris ou en proche banlieue, qu'en plus de cela, la variable "neighbourhood_cleansed" est plus précise sur le nom du quartier, et qu'elle ne contient pas de valeur manquante, on supprime simplement la variable "neighbourhood".
+Pour le reste des valeurs manquantes on pourrait faire de l'imputation.
+Pour les variables de note on pourrait regarder si l'id hôte est déjà représenté dans la base et lui imputer la valeur qu'il a déjà. On pourrait également réaliser du machine learning pour l'imputation et faire une AFC, ou par les plus proches voisins. Comme on nous a demandé de rester simple et que mon jeu de données est suffisamment important on va simplement supprimer les données manquantes restantes.
+
+
+```{r}
+df <- subset(df, select = -neighbourhood) #on supprime la variable neighbourhood
+delcol <- c("neighbourhood")
+Dictionnaire <- Dictionnaire[ ! Dictionnaire$NomVar %in% delcol,]
+df <- df %>% drop_na() #on supprime les valeurs manquantes
+```
+
+On va recoder certaines variables pour qu'elles soient plus faciles à analyser, et qu'elles soient plus parlantes.
+Par exemple pour la variable host_location, on va la couper en deux pour ne garder que le pays d'origine. On se rend compte aussi que certain venant des USA ont mis le code de l'état dans lequel ils se trouvent, si la personne habite Atlanta, alors host_location prendra comme valeur "Atlanta, GA", GA pour Georgie.
+On remodèle la variable bathrooms_text en 2 variables. La première étant le nombre de salle de bain, ou point d'eau d'un bien, la deuxième étant le type de salle de bain. Ou encore, on transforme la date d'inscription en nombre de jour inscrit
+
+
+```{r}
+df <- df %>% separate(host_location, into=c('Ville', 'Pays'), sep=', ') #separation de la variable host_location en 2 
+
+listUSA = c("AK","AZ","AR","CA","NC","SC","CO","CT","ND","SD","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MN","MS","MO","MT","NE","NV","NH","NJ","NY","NM","OH","OK","OR","PA","RI","TN","TX","UT","VT","VA","WV","WA","WI","WY") 
+#liste des codes Etats des USA
+reference <- as.Date("2022-12-01", format="%Y-%m-%d") #On stock une date de référence
+passage = as.data.frame(str_split(df$bathrooms_text, " ",simplify=TRUE)) #split de la variable bathrooms_text
+passage$TypeBath = paste(passage[,2],passage[,3])
+ps = c("Shared","Private","Half-bath")
+b = c("baths ","bath ","private bath")
+hb = c("Half-bath","Private half-bath","Shared","Private","	half-bath ")
+shb = c("shared baths","shared bath")
+df$TypeBath = passage$TypeBath
+df$NbBath = passage$V1
+
+df <- df %>% mutate(Since = as.numeric(reference- as.Date(host_since,"%d-%m-%Y"))
+                    ,PrixE = as.numeric(gsub("\\$", "", as.factor(gsub(",", "", df$price))))*0.98
+                    ,Pays = ifelse(is.na(Pays)==TRUE, Ville, Pays)
+                    ,Pays = ifelse(Pays %in% listUSA, "United States", Pays)
+                    ,TypeBath = ifelse(NbBath =="Shared", "shared bath(s)", TypeBath)
+                    ,TypeBath = ifelse(NbBath =="Half-bath", "Private half-bath", TypeBath)
+                    ,TypeBath = ifelse(NbBath =="Private", "Private half-bath", TypeBath)
+                    ,TypeBath = ifelse(TypeBath %in% b, "Private bath(s)", TypeBath)
+                    ,TypeBath = ifelse(TypeBath %in% hb, "Private half-bath", TypeBath)
+                    ,TypeBath = ifelse(TypeBath %in% shb, "shared bath(s)", TypeBath)
+                    ,NbBath = as.numeric(ifelse(NbBath %in% ps, 0.5, NbBath))
+                    ) #Recodage de nos variables
+
+df <- subset(df, select = -c(Ville,price,host_since,bathrooms_text)) #suppressions des anciennes variables
+```
+
+## Descriptif
+
+Après le data cleannig, l’une partie les plus importante d'une analyse, nous allons passer véritablement à la partie analyse. Nous avons maintenant 34883 observations, une observation étant un bien, nous avons donc 34883 biens à observer. 
+Pour commencer notre partie d'analyse, nous allons explorer sur une carte les biens enregistrés sur notre base.
+
+```{r}
+basemap <- addTiles(leaflet()) #creatio d'une base de carte
+map <- addCircleMarkers(setView(basemap, lng = 2.3522219, lat = 48.856614, zoom = 12), lng = df$longitude, lat = df$latitude, radius = 0.1, fillOpacity = 6, color ="Dark Grey")%>% addProviderTiles(providers$CartoDB.Positron) 
+#localisation/ ajout des points sur notre carte 
+map
+```
+
+On peut voir sur cette carte tous les biens de nos données. Chaque point noir représente un bien.
+Pour commencer les analyses descriptives, j'aime bien commencer par tous les variables qualitatives et ensuite faire les variables quantitatives. Cette méthode à pour moi 2 avantages, le premier est de suivre une liste et donc ne pas oublier de potentielles variables intéressantes, le second est qu'elle me permet de repérer des analyses bivariées potentiellement intéressantes à étudier.
+
+
+```{r}
+glimpse(df) #liste de nos variables / types de nos variables
+```
+Commencons par regarder où habite les propriétaires des biens de nos bases.
+
+```{r}
+sum(df$Pays == "France")/ nrow(df)
+```
+
+Sans surprise la France (Métropolitaine) est représentée à 96%.
+Mais qu'en est il des autres ?
+Comme la trace représente 96% on va tricher et rééquilibrer les fréquences, pour avoir une meilleure visualisation.
+
+
+```{r}
+cnt =  as.data.frame(prop.table(table(df$Pays))*10000) 
+#creation dataframe contenant la liste des pays et leur frequence d'apparition
+cntorder <-  as.data.frame(prop.table(table(df$Pays))*100)
+cntorder <- cntorder[order(-cntorder$Freq),]
+#retravaille des frequence pour que se soit plus visuel sur la carte
+cnt <- cnt %>% mutate(Freq = ifelse(Freq >100 , 100, Freq)
+                      ,Freq = ifelse(Freq <100 , Freq+20, Freq)
+                      )
+names(cnt)[names(cnt) == 'Var1'] <- 'region'
+cnt <- subset(cnt, cnt$region != "USA" )
+
+wm <- map_data("world") #import d'un fichier contenant les pays et leur coordonnées GPS
+cnt <- cnt %>% mutate(region = ifelse(as.character(region)=="United Kingdom", "UK" ,as.character(region))
+                      ,region = ifelse(as.character(region)=="United States", "USA" ,as.character(region))
+                      ) 
+
+coord.map <- left_join(wm, cnt, by  = "region" )#on récupère les frequence d'apparition
+ggplot(coord.map, aes(long, lat, group = group))+
+  geom_polygon(aes(fill = Freq ), color = "white")+
+  scale_fill_viridis_c(option = "C") + labs(title = "Carte des pays hôtes de nos propriétaires")
+#ggsave("country_map.png", width = 11, height = 8)
+#carte 
+```
+
+```{r}
+head(cntorder)
+```
+On peut voir sur notre carte que les propriétaires sont aussi présents à travers le monde, et en plus forte concentration aux Etats Unis, et en Europe. Même si 96% des propriétaires résident en France.
+
+Regardons maintenant si nos propriétaires ont des comptes vérifiés et s'ils ont le label "superhost".
+
+```{r}
+ggplot(df, aes("", fill = factor(host_is_superhost))) + 
+  geom_bar(aes(y = (..count..)/sum(..count..)), width = 1) +
+  scale_y_continuous() +
+  ylab("") + xlab("") + labs(fill = "host_is_superhost") +
+  theme(axis.ticks = element_blank()) + 
+  coord_polar(theta = "y") + theme_minimal() + labs(title = "Distribution de la variable host_is_superhost")
+#ggsave("host_is_superhost.png", width = 11, height = 8)
+
+ggplot(df, aes("", fill = factor(host_identity_verified))) + 
+  geom_bar(aes(y = (..count..)/sum(..count..)), width = 1) +
+  scale_y_continuous() +
+  ylab("") + xlab("") + labs(fill = "host_identity_verified") +
+  theme(axis.ticks = element_blank()) + 
+  coord_polar(theta = "y") + theme_minimal() + labs(title = "Distribution de la variable host_identity_verified")
+#ggsave("host_identity_verified.png", width = 11, height = 8)
+```
+
+On remarque sans surprise, une grande majorité de compte vérifié, mais à contrario, il y à une très faible proportion de "superhost"
+
+
+```{r}
+qmplot(x=longitude, y=latitude, data = df, color = neighbourhood_cleansed) #carte des biens en focntion de leur quartier
+#ggsave("map_quartier.png")
+```
+
+Cette carte représente nos biens selon les quartiers de paris donné Airbnb.
+On va transformer les noms des arrondissment en numéros pour une meilleure lisibilité dans nos graphiques. Nous allons aussi crée un second dictionnaire avec le nom et le numéros de chaque arrondissement.
+
+```{r}
+CorrQuartierArrondissment <- df %>% distinct(neighbourhood_cleansed)
+df <- df %>% mutate(neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Batignolles-Monceau" , "17eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Bourse" , "2eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Opéra" , "9eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Temple" , "3eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Hôtel-de-Ville" , "3eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Popincourt" , "11eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Vaugirard" , "15eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Ménilmontant" , "20eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Buttes-Chaumont" , "19eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Passy" , "16eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Buttes-Montmartre" , "18eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Reuilly" , "12eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Panthéon" , "5eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Entrepôt" , "10eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Observatoire" , "14eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Palais-Bourbon" , "7eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Gobelins" , "13eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Louvre" , "1er", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Luxembourg" , "6eme", neighbourhood_cleansed)
+                    ,neighbourhood_cleansed = ifelse(neighbourhood_cleansed=="Élysée" , "8eme", neighbourhood_cleansed)
+                    
+)
+
+arrondiss <- c("9eme","3eme","4eme","17eme","11eme","15eme","20eme","19eme","16eme","18eme","12eme","5eme","10eme","14eme"
+               ,"2eme","7eme","13eme","1er","6eme","8eme")
+
+
+CorrQuartierArrondissment$NumArr <- arrondiss
+
+```
+
+
+```{r}
+ggplot(df,aes(neighbourhood_cleansed))+ geom_bar(aes(fill=neighbourhood_cleansed)) + geom_text(aes(label=..count..), stat="count", vjust = -0.5) + labs(title = "Distribution de la variable neighbourhood_cleansed", x = "Quartier")
+#ggsave("map_quartier_bis.png", width = 11, height = 8)
+```
+
+On peut voir sur ce diagramme en barre la représentation des différents quartiers. On peut voir que c'est le quartier "Butte-Montmarte" qui est largement en tête avec plus de 6000 biens, alors que ce n'est pas le plus grand quartier si on se reporte à notre précédente carte. Le Louvre est le quartier le moins représenté.
+
+
+```{r}
+nrd <-  as.data.frame(prop.table(table(df$neighbourhood_cleansed))*100)
+nrd <- nrd[order(-nrd$Freq),]
+nrdbis <- left_join(nrd,CorrQuartierArrondissment,by =c("Var1"="NumArr"))
+nrdbis
+```
+
+Regardons maintenant la variable property_type qui represente le type de bien.
+
+```{r}
+nrd <-  as.data.frame(prop.table(table(df$property_type))*100)
+nrd <- nrd[order(-nrd$Freq),]
+nrd
+```
+
+On remarque une très forte majorité de bien dit "	Entire rental unit". Qu’en est-il de room_type (type de chambre).
+
+```{r}
+ggplot(df,aes(room_type))+ geom_bar(aes(fill=room_type)) + geom_text(aes(label=..count..), stat="count", vjust = -0.5) + labs(title = "Distribution de la variable room_type", x = "Type de Chambre")
+#ggsave("room_type.png", width = 11, height = 8)
+```
+
+C'est aussi "Entire home" qui domine largement, Il n'y a que très peu d'hôtels et de chambres partagées.
+Passons au type de salle de bain.
+
+```{r}
+ggplot(df,aes(TypeBath))+ geom_bar(aes(fill=TypeBath)) + geom_text(aes(label=..count..), stat="count", vjust = -0.5) + labs(title = "Distribution de la variable TypeBath", x = "Type de salle de bain")
+#ggsave("TypeBath.png", width = 11, height = 8)
+```
+
+On voit que presque tous les biens disposent d'au moins une salle de bain complète. On notera que 102 biens ne disposent que de half-bathroom, qui sont des salles de bain contenant un lavabo et des toilettes mais pas de baignoire ni de douche.
+
+
+```{r}
+ggplot(df, aes(x = accommodates)) + geom_histogram() + geom_text(aes(label=..count..), stat="count", vjust = -0.5) + labs(title = "Distribution de la variable accommodates", x = "Nombre de personne que peut acceuillir un bien")
+#ggsave("accommodates.png", width = 11, height = 8)
+```
+
+```{r}
+ggplot(df, aes(x = bedrooms)) + geom_histogram() + geom_text(aes(label=..count..), stat="count", vjust = -0.5) + labs(title = "Distribution de la variable bedrooms", x = "Nombre de chambre")
+#ggsave("bedrooms.png", width = 11, height = 8)
+```
+
+```{r}
+ggplot(df, aes(x = beds)) + geom_histogram() + geom_text(aes(label=..count..), stat="count", vjust = -0.5) + labs(title = "Distribution de la variable beds", x = "Nombre de lit")
+#ggsave("beds.png", width = 11, height = 8)
+```
+
+```{r}
+ggplot(df, aes(x = NbBath)) + geom_histogram() + geom_text(aes(label=..count..), stat="count", vjust = -0.5) + labs(title = "Distribution de la variable NbBath", x = "Nombre de salle de bain")
+#ggsave("NbBath.png", width = 11, height = 8)
+```
+
+
+```{r}
+ggplot(df, aes(x = PrixE)) + geom_histogram() + labs(title = "Distribution de la variable PrixE", x = "Prix")
+#ggsave("PrixE.png", width = 11, height = 8)
+```
+
+Il semblerait qu'il y ait quelques outliers dans nos données, 50 chambres dans un bien, 77 lits ou encore 12K€ la nuit. Cela semble assez étrange. L'avantage de nos données, c'est qu'elles sont réelles, il suffit donc de vérifier au près d'airbnb en tapant l'annonce sur Google. 
+
+L'annonce d'un certain Xavier possédant 50 chambre : https://www.airbnb.fr/rooms/8876983?source_impression_id=p3_1670436625_xKWnKnYPMpNTTNCa
+C'est en fait un hôtel qui loue des chambres donc l'hôtel possède probablement 50 chambres (encore que sur le site nous n’en voyons que 10) mais on loue d'une chambre.
+
+
+L'annonce d'un certain Joffrey à 9000€ la nuit :
+https://www.airbnb.fr/rooms/30219412?source_impression_id=p3_1670437077_QyQCUJaZDPH%2BtO5O&check_in=2023-01-09&guests=1&adults=1&check_out=2023-01-15
+Aujourd'hui le prix à la nuit était de 500€
+
+Certaines annonces sont introuvables, elles ont peut être été supprimées ou modifiées.
+
+```{r}
+summary(df$PrixE)
+a = df[order(-df$PrixE),]
+a[c(1:10),c(2,8,9,13:16,21,25)]
+```
+
+```{r}
+df2 <- subset(df, df$PrixE <= 700 )
+nrow(df2)/nrow(df)
+```
+
+Pour nos futurs analyses nous allons conserver 98% des biens en gardant un prix inférieur à 700€.
+Nous supprimons également les outliers des chambres, lits et salles de bain.
+
+```{r}
+df2 <- subset(df2, df2$bedrooms <= 10 )
+df2 <- subset(df2, df2$beds <= 10 )
+df2 <- subset(df2, df2$NbBath <= 10 )
+```
+
+
+```{r}
+ggplot(df2, aes(x = PrixE)) + 
+  geom_histogram(aes(y = ..density..), binwidth = 30) +
+  geom_density() + labs(title = "Distribution de la variable Prix", x = "Prix")
+#ggsave("PrixE_bis.png", width = 11, height = 8)
+```
+
+C'est déjà plus lisible comme ca. On voit aussi que la grosse majorité des biens on un prix compris enrte 50 et 200€ la nuit.
+
+```{r}
+ggplot(df2, aes(y = Since, x = "")) + geom_boxplot()+ labs(title = "Distribution de la variable Since", x = "Nombre de jour depuis l'inscription sur le site")
+summary(df2$Since)
+#ggsave("Since.png", width = 11, height = 8)
+```
+
+## Analyses multi-variées
+
+Maintenant que l'on a fait un peu le tour des analyses descriptives, nous allons tenter de trouver de possibles liens entre nos variables par des analyses multi-variées. A noter que l'on ne vérifiera pas la véracité de nos propos par des tests statistiques.
+
+```{r}
+dfinf = data.frame(
+  neighbourhood_cleansed = table(df2$neighbourhood_cleansed)
+)
+names(dfinf)[names(dfinf) == 'neighbourhood_cleansed.Var1'] <- 'neighbourhood_cleansed'
+names(dfinf)[names(dfinf) == 'neighbourhood_cleansed.Freq'] <- 'PrixM'
+dfinf$PrixM = tapply(df2$PrixE, df2$neighbourhood_cleansed, mean)
+dfinf$sdp = tapply(df2$PrixE, df2$neighbourhood_cleansed, sd)
+ggplot(df2, aes(y = PrixE, x = neighbourhood_cleansed)) + geom_boxplot() + 
+  geom_errorbar(data = dfinf, 
+                aes(y = PrixM, ymin = PrixM - sdp, ymax = PrixM + sdp), 
+                col = "red", width = .4) + labs(title = "Distribution de la variable neighbourhood_cleansed en fonction du prix", x = "Quartier")
+#ggsave("neighbourhood_prix.png", width = 11, height = 8)
+```
+
+Sans surprise, se sont les quartiers au centre de Paris qui sont les plus cher, à savoir : Hotel-de-ville, le Louvre, et le Luxembourg. Ménilmontant est le quartier le moins cher.
+
+```{r}
+df2$beds <- as.factor(df2$beds)
+dfinf = data.frame(
+  beds = table(df2$beds)
+)
+names(dfinf)[names(dfinf) == 'beds.Var1'] <- 'beds'
+names(dfinf)[names(dfinf) == 'beds.Freq'] <- 'PrixM'
+dfinf$PrixM = tapply(df2$PrixE, df2$beds, mean)
+dfinf$sdp = tapply(df2$PrixE, df2$beds, sd)
+ggplot(df2, aes(y = PrixE, x = beds)) + geom_boxplot()+ 
+  geom_errorbar(data = dfinf, 
+                aes(y = PrixM, ymin = PrixM - sdp, ymax = PrixM + sdp), 
+                col = "red", width = .4) + labs(title = "Distribution de la variable beds en fonction du prix", x = "Nombre de lit")
+#ggsave("beds_prix.png", width = 11, height = 8)
+prop.table(table(df$beds))*100
+df2$beds <- as.numeric(df2$beds)
+```
+
+On peut voir que plus le bien dispose de lit plus la moyenne des prix est élevée. En regardant le nombre de valeurs extrêmes pour les premières catégories de lit, je ne pense pas que se soit la variable qui influence le plus le prix.
+
+```{r}
+df2$NbBath <- as.factor(df2$NbBath)
+dfinf = data.frame(
+  NbBath = table(df2$NbBath)
+)
+names(dfinf)[names(dfinf) == 'NbBath.Var1'] <- 'NbBath'
+names(dfinf)[names(dfinf) == 'NbBath.Freq'] <- 'PrixM'
+dfinf$PrixM = tapply(df2$PrixE, df2$NbBath, mean)
+dfinf$sdp = tapply(df2$PrixE, df2$NbBath, sd)
+ggplot(df2, aes(y = PrixE, x = NbBath)) + geom_boxplot()+ 
+  geom_errorbar(data = dfinf, 
+                aes(y = PrixM, ymin = PrixM - sdp, ymax = PrixM + sdp), 
+                col = "red", width = .4) + labs(title = "Distribution de la variable NbBath en fonction du prix", x = "Nombre de salle de bain")
+#ggsave("NbBath_prix.png", width = 11, height = 8)
+prop.table(table(df$NbBath))*100
+df2$NbBath <- as.numeric(df2$NbBath)
+```
+
+Même conclusion que précédemment, plus un bien a de salle de bain, plus le prix augmente. Ce qui semble assez logique finalement, car un studio de 20m2, moins cher qu'un grand duplex, ne peut pas contenir 6 salles de bain. Il aurait été intéressant de voir le prix au m2, c'est dommage de ne pas avoir cette information. On pourrait peut-être estimer taille du bien en le localisant précisément sur la carte et calculer la taille du bâtiment, mais cela dépasse malheureusement mes capacités. 
+
+
+```{r}
+dfinf = data.frame(
+  room_type = table(df2$room_type)
+)
+names(dfinf)[names(dfinf) == 'room_type.Var1'] <- 'room_type'
+names(dfinf)[names(dfinf) == 'room_type.Freq'] <- 'PrixM'
+dfinf$PrixM = tapply(df2$PrixE, df2$room_type, mean)
+dfinf$sdp = tapply(df2$PrixE, df2$room_type, sd)
+ggplot(df2, aes(y = PrixE, x = room_type)) + geom_boxplot()+ 
+  geom_errorbar(data = dfinf, 
+                aes(y = PrixM, ymin = PrixM - sdp, ymax = PrixM + sdp), 
+                col = "red", width = .4) + labs(title = "Distribution de la variable room_type en fonction du prix", x = "Type de bien")
+#ggsave("room_type_prix.png", width = 11, height = 8)
+prop.table(table(df$room_type))*100
+```
+
+Sans surprise là encore, les hôtels sont en moyenne les plus cher, suivi par les appartements, puis les chambres privées et enfin les chambres partagées. On remarque aussi beaucoup de valeurs extrêmes parmi nos catégories.
+
+```{r}
+ggplot(df2, aes(factor(host_identity_verified), PrixE)) + 
+  geom_boxplot() + labs(title = "Distribution de la variable host_identity_verified en fonction du prix", x = "Compte vérifié ou non")
+#ggsave("host_verified_prix.png", width = 11, height = 8)
+```
+
+Ici on voit que le faite d'avoir un compte vérifé augmente très légèrement le prix.
+
+```{r}
+ggplot(data=df) + geom_boxplot(aes(x=neighbourhood_cleansed, y= PrixE, fill=room_type)) + scale_y_log10() + geom_hline(yintercept = mean(df$PrixE), color="blue") + labs(title = "Distribution de la variable neighbourhood_cleansed en fonction du prix et du type de bien", x = "Quartier")
+#ggsave("neighbourhood_prix_room_type.png", width = 11, height = 8)
+```
+
+Comme on le disait précédemment, les hôtels (en vert) sont en moyenne plus cher que les autres type de bien, peu importe le quartier. On voit aussi qu'il existe une différence de prix non négligeable entre les hôtels et les shared room (en violet). On voit également que la moyennes des prix des appartements, dans la plupart des quartiers est inférieure au prix moyen (137.5314€). C'est très intéressant.
+
+Même si j'avais dit qu'on ne ferait pas de test statistique, nous allons quand même faire une matrice des corrélations pour les variables quantitatives. Pour les variables qualitatives on pourrait faire une anova non paramétrique, puisque je ne pense pas que nos données soient issues d’une population normale (gaussienne), mais ça serait déjà plus compliqué et on passerait le stade d'analyses descriptives.
+
+```{r}
+df2 <- df2 %>% mutate(host_identity_verified = ifelse(as.character(host_identity_verified)=="TRUE", 1 ,0))
+dfnum <-df2[,c(7,8,14:18,20,21,23:25)]
+corr <- scale(dfnum)
+ggcorr(corr,label=T, label_round = 2)
+#ggsave("corr.png", width = 11, height = 8)
+```
+
+On voit très rapidement le lien (logique) qui existe entre les chambres, et le nombre de personne que peut accueillir un bien (accommodates) et le nombre de lit et le nombre de salle de bain. Dans les variables quantitatives (le quartier n'est donc pas représenté) c'est bien ces 4 dernières variables qui corrèlent positivement le plus le prix. le nombre de nuit maximum par réservation n'a aucune influence, positive ou négative sur le prix.
+
+```{r}
+P_sf <- df2 %>%
+  st_as_sf(coords = c("longitude", "latitude"))
+grid<-st_make_grid(P_sf,what = "polygons",cellsize = .0015) #fabriquer les tuiles
+grid2<-st_sf(grid) #transformer en objet geometry
+grid2$row<-as.factor(row.names(grid2)) #ajouter un nom aux tuiles
+#compter le nb d'hébergement par tuile
+grid3 <- st_intersection(P_sf,grid2)
+#aggreger les prix par tuile ( n retient la médiane car la moyenne peut etre troublée par des valeurs extrêmes)
+grid4<- aggregate(PrixE ~ row, data=grid3, FUN=mean)
+#on merge
+merged = merge(grid2, grid4, by = "row")
+ggplot(merged)+ geom_sf(aes(fill=PrixE),colour=NA)+theme_minimal()+  scale_fill_gradient(low = "lightblue", high = "Black")
+#ggsave("heat_map_tuiles.png", width = 11, height = 8)
+```
+
+Voici une représentation graphique des prix et chaque tuile représente une zone géographique. Les tuiles noires, qui représentent les prix les plus élevés, sont situées plus sur les bords de Seines, et donc au centre de Paris. C'est ce que l'on avait trouvé précédemment.
+
+```{r}
+df$PrixE_rec <- cut(df$PrixE,
+  include.lowest = TRUE,
+  right = FALSE,
+  dig.lab = 4,
+  breaks = c(7.84, 62.72, 83.3, 107.8, 147, 229.32, 90094.4)
+)
+
+df$PrixE_rec <- as.character(df$PrixE_rec)
+df$PrixE_rec[df$PrixE_rec == "[7.84,62.72)"] <- "very low"
+df$PrixE_rec[df$PrixE_rec == "[62.72,83.3)"] <- "low"
+df$PrixE_rec[df$PrixE_rec == "[83.3,107.8)"] <- "medium low"
+df$PrixE_rec[df$PrixE_rec == "[107.8,147)"] <- "medium high"
+df$PrixE_rec[df$PrixE_rec == "[147,229.3)"] <- "high"
+df$PrixE_rec[df$PrixE_rec == "[229.3,9.009e+04]"] <- "very high"
+df$PrixE_rec <- as.factor(df$PrixE_rec)
+
+col = brewer.pal(n = 5, name = "Spectral")
+colors <- colorFactor(col, domain = c("Very low", "low","medium low","medium high","high","very high"))
+map_secteur_prix <- leaflet()
+map_secteur_prix <- addTiles(map_secteur_prix)
+map_secteur_prix <- addCircleMarkers(
+  map = map_secteur_prix,
+  lng = df$longitude,
+  lat = df$latitude,
+  popup = paste("Latitude:", df$latitude, ", longitude:", df$longitude),
+  label = paste("Prix", df$PrixE),
+  color = colors(df$PrixE_rec),
+  radius = 1  # Rayon des points. On divise par 100, sinon les points sont trop gros.
+)
+map_secteur_prix <- addProviderTiles(
+  map = map_secteur_prix,
+  provider = providers$Stamen.TonerLite
+)
+map_secteur_prix <- addLegend(
+  map = map_secteur_prix,
+  position = "topright",
+  pal = colors,
+  values = df$PrixE_rec,
+  title = "Région",
+  opacity = 1
+)
+map_secteur_prix
+```
+
+
+```{r}
+colors <- colorNumeric(palette = "plasma", domain = df2$PrixE)
+map_prix <- leaflet()
+map_prix <- addTiles(map_prix)
+map_prix <- addCircleMarkers(
+  map = map_prix,
+  lng = df2$longitude,
+  lat = df2$latitude,
+  popup = paste("Latitude:", df2$latitude, ", longitude:", df2$longitude),
+  label = paste("Prix", df2$PrixE),
+  color = colors(df2$PrixE),
+  radius = 1  # Rayon des points. On divise par 100, sinon les points sont trop gros.
+)
+map_prix <- addProviderTiles(
+  map = map_prix,
+  provider = providers$Stamen.TonerLite
+)
+map_prix <- addLegend(
+  map = map_prix,
+  position = "topright",
+  pal = colors,
+  values = df$PrixE,
+  title = "Région",
+  opacity = 1
+)
+map_prix
+```
+
+Dans la continuité de la carte avec les tuiles de prix, je voulais faire une carte de Paris avec une heatmap des prix. 
+Voila donc deux carte des prix avec des constructions différentes. Pour la première, le prix à été découpé par la foncion icut du package questionr en catégorie de prix, puis le point sur la carte qui représente le bien est teint en fonction de sa catégorie de prix. C’est très visuel car on voit directement où sont les biens les plus cher. Il faut quand même faire attention, les bien les plus cher (very high) sont en vert et les high en rouge, je n'ai pas réussi à corriger le problème. Mais cette première carte confirme ce que nous avons déjà vu, à savoir que les biens les plus cher se concentrent autour des 1,2,6,7 et 8ème arrondissement de Paris.
+La deuxième carte suit le même principe mais repose sur le prix en variable continue, le problème ici est qu'au vu de la grande hétérogénéité des prix et le très fort pourcentage de prix "faible", on ne voit pas grand chose si on ne zoome pas.
+
+```{r}
+
+res <- subset(df, df$has_availability==TRUE)
+map_resa <- leaflet()
+map_resa <- addTiles(map_resa)
+map_resa <- addMarkers(
+  map = map_resa,
+  lng = res$longitude,
+  lat = res$latitude,
+  popup = paste(res$neighbourhood_cleansed, "Quartier"),
+  clusterOptions = markerClusterOptions()
+)
+map_resa <- addProviderTiles(
+  map = map_resa, 
+  provider = providers$Stamen.TonerLite
+)
+map_resa <- addEasyButton(
+  map = map_resa,
+  button = easyButton(
+    icon = "fa-globe",
+    title = "Zoom initial",
+    onClick = JS("function(btn, map){ map.setZoom(4); }")
+  )
+)
+map_resa
+```
+
+Cette dernière carte est un peu différente, elle regroupe les biens qui ont des disponibilités pour leur réservation. Cette carte est construite en regroupant les biens par pacquets, qui se subdivise lorsque l'on zoom sur certains endroits, ce qui rend la navigation sur la carte beaucoup plus fluide. En rélalité cette carte n'apporte pas grand chose, mais je voulais juste essayer différentes facons de faire des cartes pour repésenter mes biens.
+
+#Conclusion
+
+Au final, nous avons vu au travers de cette analyse, que le prix d'une réservation était corrélé à plusieurs choses. Le quartier, qui est sans doute la variable la plus importante, le type de bien (hôtel, ou appartement), le nombre de chambre, de salle de bain, et de lit. Il serait intéressant d'analyser l'opposition de certaines variables sur l'influence du prix. On pourrait par exemple opposer le type de bien et les services proposés et ainsi voir si c'est réellement l'hôtel qui est le plus cher ou bien si se sont les services des hôtels qui font monter le prix. On pourrait également opposer des variables fortement corrélées entre elles, comme le nombre de pièce, la taille du bien et la taille moyenne d'une chambre et/ou d'une salle de bain. De cette façon on pourrait savoir ce qui influe vraiment sur le prix. En suivant ces pistes j'aurais pu réaliser une segmentation par une ACP pour mes variables numériques, et une AFCM pour compléter avec mes variables catégorielles. Une piste qui pourrait être intéressante serait de convertir la variable quartier en numérique pour pouvoir l'opposer aux autres variables numériques, pour cela on pourrait probablement compter le nombre de monuments par quartier et remplacer le nom par ce nombre. Même si on pouvait opposer ces variables en transformant nos variables numériques en catégorielles, je trouve intéressante la comparaison entre différentes méthodes de segmentation.
+Je n'ai jamais eu l'occasion au par avant de pouvoir travailler sur des données spatiales, et j'ai trouvé très intéressant de travailler ce genre de données, cette façon de pouvoir les représenter d'une manière différente de celle dont j'ai l'habitude, j'ai pu notamment découvrir la construction de carte.
