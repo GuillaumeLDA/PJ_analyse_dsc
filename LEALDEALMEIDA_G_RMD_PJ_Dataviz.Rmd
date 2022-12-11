@@ -217,7 +217,8 @@ df <- subset(df, select = -c(Ville,price,host_since,bathrooms_text)) #suppressio
 
 ## Descriptif
 
-Après le data cleannig, l’une partie les plus importante d'une analyse, nous allons passer véritablement à la partie analyse. Nous avons maintenant 34883 observations, une observation étant un bien, nous avons donc 34883 biens à observer. 
+Après le data cleannig, l’une partie les plus importante d'une analyse, nous allons passer véritablement à la partie analyse. 
+Nous avons maintenant 34883 observations, une observation étant un bien, nous avons donc 34883 biens à observer. 
 Pour commencer notre partie d'analyse, nous allons explorer sur une carte les biens enregistrés sur notre base.
 
 ```{r}
@@ -228,7 +229,8 @@ map
 ```
 
 On peut voir sur cette carte tous les biens de nos données. Chaque point noir représente un bien.
-Pour commencer les analyses descriptives, j'aime bien commencer par tous les variables qualitatives et ensuite faire les variables quantitatives. Cette méthode à pour moi 2 avantages, le premier est de suivre une liste et donc ne pas oublier de potentielles variables intéressantes, le second est qu'elle me permet de repérer des analyses bivariées potentiellement intéressantes à étudier.
+Pour commencer les analyses descriptives, j'aime bien commencer par tous les variables qualitatives et ensuite faire les variables quantitatives. 
+Cette méthode à pour moi 2 avantages, le premier est de suivre une liste et donc ne pas oublier de potentielles variables intéressantes, le second est qu'elle me permet de repérer des analyses bivariées potentiellement intéressantes à étudier.
 
 
 ```{r}
@@ -631,9 +633,16 @@ map_resa <- addEasyButton(
 map_resa
 ```
 
-Cette dernière carte est un peu différente, elle regroupe les biens qui ont des disponibilités pour leur réservation. Cette carte est construite en regroupant les biens par pacquets, qui se subdivise lorsque l'on zoom sur certains endroits, ce qui rend la navigation sur la carte beaucoup plus fluide. En rélalité cette carte n'apporte pas grand chose, mais je voulais juste essayer différentes facons de faire des cartes pour repésenter mes biens.
+Cette dernière carte est un peu différente, elle regroupe les biens qui ont des disponibilités pour leur réservation. 
+Cette carte est construite en regroupant les biens par pacquets, qui se subdivise lorsque l'on zoom sur certains endroits, ce qui rend la navigation sur la carte beaucoup plus fluide. 
+En rélalité cette carte n'apporte pas grand chose, mais je voulais juste essayer différentes facons de faire des cartes pour repésenter mes biens.
 
 #Conclusion
 
-Au final, nous avons vu au travers de cette analyse, que le prix d'une réservation était corrélé à plusieurs choses. Le quartier, qui est sans doute la variable la plus importante, le type de bien (hôtel, ou appartement), le nombre de chambre, de salle de bain, et de lit. Il serait intéressant d'analyser l'opposition de certaines variables sur l'influence du prix. On pourrait par exemple opposer le type de bien et les services proposés et ainsi voir si c'est réellement l'hôtel qui est le plus cher ou bien si se sont les services des hôtels qui font monter le prix. On pourrait également opposer des variables fortement corrélées entre elles, comme le nombre de pièce, la taille du bien et la taille moyenne d'une chambre et/ou d'une salle de bain. De cette façon on pourrait savoir ce qui influe vraiment sur le prix. En suivant ces pistes j'aurais pu réaliser une segmentation par une ACP pour mes variables numériques, et une AFCM pour compléter avec mes variables catégorielles. Une piste qui pourrait être intéressante serait de convertir la variable quartier en numérique pour pouvoir l'opposer aux autres variables numériques, pour cela on pourrait probablement compter le nombre de monuments par quartier et remplacer le nom par ce nombre. Même si on pouvait opposer ces variables en transformant nos variables numériques en catégorielles, je trouve intéressante la comparaison entre différentes méthodes de segmentation.
+Au final, nous avons vu au travers de cette analyse, que le prix d'une réservation était corrélé à plusieurs choses. Le quartier, qui est sans doute la variable la plus importante, le type de bien (hôtel, ou appartement), le nombre de chambre, de salle de bain, et de lit. 
+Il serait intéressant d'analyser l'opposition de certaines variables sur l'influence du prix. On pourrait par exemple opposer le type de bien et les services proposés et ainsi voir si c'est réellement l'hôtel qui est le plus cher ou bien si se sont les services des hôtels qui font monter le prix. 
+On pourrait également opposer des variables fortement corrélées entre elles, comme le nombre de pièce, la taille du bien et la taille moyenne d'une chambre et/ou d'une salle de bain. De cette façon on pourrait savoir ce qui influe vraiment sur le prix. 
+En suivant ces pistes j'aurais pu réaliser une segmentation par une ACP pour mes variables numériques, et une AFCM pour compléter avec mes variables catégorielles. 
+Une piste qui pourrait être intéressante serait de convertir la variable quartier en numérique pour pouvoir l'opposer aux autres variables numériques, pour cela on pourrait probablement compter le nombre de monuments par quartier et remplacer le nom par ce nombre. 
+Même si on pouvait opposer ces variables en transformant nos variables numériques en catégorielles, je trouve intéressante la comparaison entre différentes méthodes de segmentation.
 Je n'ai jamais eu l'occasion au par avant de pouvoir travailler sur des données spatiales, et j'ai trouvé très intéressant de travailler ce genre de données, cette façon de pouvoir les représenter d'une manière différente de celle dont j'ai l'habitude, j'ai pu notamment découvrir la construction de carte.
