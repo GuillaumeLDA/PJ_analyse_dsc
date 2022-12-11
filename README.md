@@ -13,6 +13,6 @@ Il y a le ficher packages.csv comme demandé dans le dossier "data".
 
 Le lien pour télécharger les données principales qui sont trop volumineuses pour github : <br/>
 http://insideairbnb.com/get-the-data  <br/>
-le bon fichier est "listing.cvs" pour Paris <br/>
-Un dossier avec toutes les sorties graphiques. <br/>
+le bon fichier est "listing.cvs" pour Paris <br/><br/>
+Un dossier avec toutes les sorties graphiques. <br/><br/>
 Une version du ficher projet en .Rmd et une en .html
